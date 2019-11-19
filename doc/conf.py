@@ -21,7 +21,7 @@ import os
 sys.path.insert(0, os.path.abspath('..'))
 
 
-# mocking out rwa (and hopefully h5py) for readthedocs to successfully compile the project and 
+# mocking out rwa (and hopefully h5py) for readthedocs to successfully compile the project and
 # generate the doc
 mock_ok = True
 try:
@@ -83,7 +83,7 @@ author = u'François Laurent' #, Jean-Baptiste Masson
 # built documents.
 #
 # The short X.Y version.
-version = u'0.4.6'
+version = u'0.4.7'
 # The full version, including alpha/beta/rc tags.
 release = u'0.4'
 

@@ -182,6 +182,10 @@ class Analyses(object):
         self.data = a
 
     @property
+    def type(self):
+        return type(self.data)
+
+    @property
     def metadata(self):
         if self._metadata is None:
             self._metadata = {}
@@ -665,6 +669,23 @@ def append_leaf(analysis_tree, augmented_branch, overwrite=False):
         analysis_tree.data = augmented_branch.data
 
 
+def merge_any_level(tree, other_trees, resolve=None):
+    existing_labels = set(tree.labels)
+    if isinstance(other_trees, Analyses):
+        other_trees = [other_trees]
+    for other_tree in other_trees:
+        if resolve and resolve(tree, other_tree) is False:
+            continue
+        new_labels = set(other_tree.labels) - existing_labels
+        if new_labels:
+            for label in new_labels:
+                tree.add(other_tree[label], label=label, comment=other_tree.comments[label])
+        for label in existing_labels:
+            if label in other_tree.labels:
+                merge_any_level(tree[label], other_tree[label], resolve)
+        existing_labels |= new_labels
+
+
 __all__ = [
     'AnalysesView',
     'InstancesView',
@@ -678,5 +699,6 @@ __all__ = [
     'coerce_labels',
     'format_analyses',
     'append_leaf',
+    'merge_any_level',
     ]
 
