@@ -293,14 +293,15 @@ class Analyses(object):
 
 
 def map_analyses(fun, analyses, label=False, comment=False, metadata=False, depth=False,
-        allow_tuples=False):
-    with_label, with_comment, with_metadata, with_depth = label is 0 or label, comment, metadata, depth
+        ranks=False, has_child=False, allow_tuples=False):
+    with_label, with_comment, with_metadata = label is 0 or label, comment, metadata
+    with_depth, with_ranks, with_has_child = depth, ranks, has_child
     def _fun(x, **kwargs):
         y = fun(x, **kwargs)
         if not allow_tuples and isinstance(y, tuple):
             raise ValueError('type conflict: function returned a tuple')
         return y
-    def _map(analyses, label=None, comment=None, depth=0):
+    def _map(analyses, label=None, comment=None, depth=0, ranks=()):
         kwargs = {}
         if with_label:
             kwargs['label'] = label
@@ -310,15 +311,22 @@ def map_analyses(fun, analyses, label=False, comment=False, metadata=False, dept
             kwargs['metadata'] = analyses.metadata
         if with_depth:
             kwargs['depth'] = depth
+        if with_ranks:
+            kwargs['ranks'] = ranks
+        has_child = bool(analyses.instances)
+        if with_has_child:
+            kwargs['has_child'] = has_child
         node = _fun(analyses._data, **kwargs)
-        if analyses.instances:
+        if has_child:
             depth += 1
             tree = []
-            for label in analyses.instances:
+            N = len(analyses.labels)
+            for n, label in enumerate(analyses.instances):
                 child = analyses.instances[label]
                 comment = analyses.comments[label]
+                rank = n, N
                 if isinstance(child, Analyses):
-                    tree.append(_map(child, label, comment, depth))
+                    tree.append(_map(child, label, comment, depth, ranks + (rank,)))
                 else:
                     if with_label:
                         kwargs['label'] = label
@@ -326,6 +334,10 @@ def map_analyses(fun, analyses, label=False, comment=False, metadata=False, dept
                         kwargs['comment'] = comment
                     if with_depth:
                         kwargs['depth'] = depth
+                    if with_rank:
+                        kwargs['ranks'] = ranks + (rank,)
+                    if with_has_child:
+                        kwargs['has_child'] = False
                     tree.append(_fun(child, **kwargs))
             return node, tuple(tree)
         else:
@@ -577,20 +589,42 @@ def coerce_labels_and_metadata(analyses):
 coerce_labels = coerce_labels_and_metadata
 
 
-def format_analyses(analyses, prefix='\t', node=type, global_prefix='', format_standalone_root=None,
-        metadata=False):
+def format_analyses(analyses, prefix='    ', node=type, global_prefix='', format_standalone_root=None,
+        metadata=False, vertical_connector='|', horizontal_connector='-', junction='+', arrow='> '):
     if format_standalone_root is None:
         if metadata:
             format_standalone_root = lambda r: '<Analyses {}> {}'.format(*r.split('\n'))
         else:
             format_standalone_root = lambda r: '<Analyses {}>'.format(r)
-    def _format(data, label=None, comment=None, metadata=None, depth=0):
-        _prefix = global_prefix + prefix * depth
-        s = [_prefix]
+    vc, hc, jc, ar = vertical_connector, horizontal_connector, junction, arrow
+    def _format(data, label=None, comment=None, metadata=None, ranks=(), has_child=False):
+        depth = len(ranks)
+        if depth == 0:
+            _prefix = _top_prefix = global_prefix
+        else:
+            _prefixes = [global_prefix]
+            for n, N in ranks[:-1]:
+                if n+1 == N:
+                    _prefixes.append(prefix)
+                else:
+                    _prefixes.append(vc + ' ' * (len(prefix) - len(vc)))
+            _prefix = ''.join(_prefixes)
+            _rep = (len(prefix) - len(jc) - len(ar)) / len(hc)
+            _top_prefix = _prefix + jc + hc * int(_rep) + ar
+            n, N = ranks[-1]
+            if n+1 == N:
+                _prefix = _prefix + prefix
+            else:
+                _prefix = _prefix + vc + ' ' * (len(prefix) - len(vc))
+        sub_prefix = '  '
+        _sub_prefix = vc + ' ' * (len(sub_prefix) - len(vc)) if has_child else sub_prefix
+        s = [_top_prefix]
         t = []
-        if label is None:
+        if label is None: # top node
+            assert depth == 0
             assert comment is None
             if node:
+                s.append('input: ')
                 s.append(str(node(data)))
             else:
                 return None
@@ -608,19 +642,22 @@ def format_analyses(analyses, prefix='\t', node=type, global_prefix='', format_s
             if comment:
                 assert isinstance(comment, str)
                 _comment = comment.split('\n')
-                s.append('\n{}"{}')
+                s.append('\n{}{}"{}')
                 t.append(_prefix)
+                t.append(_sub_prefix)
                 t.append(_comment[0])
                 for _line in _comment[1:]:
-                    s.append('\n{} {}')
+                    s.append('\n{}{} {}')
                     t.append(_prefix)
+                    t.append(_sub_prefix)
                     t.append(_line)
                 s.append('"')
         if metadata:
             for key in metadata:
                 val = metadata[key]
-                s.append('\n{}@{}={}')
+                s.append('\n{}{}@{}={}')
                 t.append(_prefix)
+                t.append(_sub_prefix)
                 t.append(key)
                 t.append(val)
         return ''.join(s).format(*t)
@@ -636,7 +673,7 @@ def format_analyses(analyses, prefix='\t', node=type, global_prefix='', format_s
         else:
             assert isinstance(_node, str)
             return itertools.chain([_node], *[_flatten(c) for c in _children])
-    entries = list(_flatten(map_analyses(_format, analyses, label=True, comment=True, metadata=metadata, depth=True)))
+    entries = list(_flatten(map_analyses(_format, analyses, label=True, comment=True, metadata=metadata, ranks=True, has_child=True)))
     if entries[1:]:
         return '\n'.join(entries)
     else:

@@ -208,7 +208,7 @@ def _dump_rwa(args):
         for input_file in input_files:
             print('in {}:'.format(input_file))
             analyses = load_rwa(input_file, lazy=True)
-            print(format_analyses(analyses, global_prefix='\t', node=lazytype, metadata=kwargs.get('metadata', False)))
+            print(format_analyses(analyses, global_prefix='   ', node=lazytype, metadata=kwargs.get('metadata', False)))
 
 def _curl(args):
     import copy
